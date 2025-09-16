@@ -11,34 +11,101 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const tagOptions = [
+/* ===================== Types locais ===================== */
+type OSCStatus = 'ativo' | 'verificar' | 'inativo' | 'backlog';
+
+const statusOptions: OSCStatus[] = ['ativo', 'verificar', 'inativo', 'backlog'];
+
+const statusLabels: Record<OSCStatus, string> = {
+  ativo: 'Ativo',
+  verificar: 'Verificar',
+  inativo: 'Inativa (Não querem/podem receber)',
+  backlog: 'Backlog',
+};
+
+const isOSCStatus = (v: string): v is OSCStatus =>
+  (statusOptions as string[]).includes(v);
+
+
+type Tag =
+  | 'sem_contato'
+  | 'boas_vindas'
+  | 'solicitar_questionario'
+  | 'depoimento'
+  | 'direito_imagem';
+
+type TabKey = 'checklist' | 'crm' | 'contato';
+
+/** Garante todas as chaves obrigatórias do checklist */
+type Checklist = {
+  cnpjAtivo: boolean;
+  fitObjetivos: boolean;
+  verificacaoReputacao: boolean;
+  pesquisadoCNEP: boolean;
+  pesquisadoCEPIM: boolean;
+  pesquisadoCEIS: boolean;
+  enderecoConfirmado: boolean;
+  emailContato: string;
+};
+
+const defaultChecklist: Checklist = {
+  cnpjAtivo: false,
+  fitObjetivos: false,
+  verificacaoReputacao: false,
+  pesquisadoCNEP: false,
+  pesquisadoCEPIM: false,
+  pesquisadoCEIS: false,
+  enderecoConfirmado: false,
+  emailContato: '',
+};
+
+function ensureChecklist(c?: Partial<Checklist> | null): Checklist {
+  return {
+    cnpjAtivo: c?.cnpjAtivo ?? false,
+    fitObjetivos: c?.fitObjetivos ?? false,
+    verificacaoReputacao: c?.verificacaoReputacao ?? false,
+    pesquisadoCNEP: c?.pesquisadoCNEP ?? false,
+    pesquisadoCEPIM: c?.pesquisadoCEPIM ?? false,
+    pesquisadoCEIS: c?.pesquisadoCEIS ?? false,
+    enderecoConfirmado: c?.enderecoConfirmado ?? false,
+    emailContato: c?.emailContato ?? '',
+  };
+}
+
+/* ===================== Dados estáticos ===================== */
+const tagOptions: Tag[] = [
   'sem_contato',
-  'boas_vindas', 
+  'boas_vindas',
   'solicitar_questionario',
   'depoimento',
-  'direito_imagem'
+  'direito_imagem',
 ];
 
-const tagLabels = {
+const tagLabels: Record<Tag, string> = {
   sem_contato: 'Sem contato',
   boas_vindas: 'Boas vindas',
   solicitar_questionario: 'Solicitar questionário',
   depoimento: 'Depoimento',
-  direito_imagem: 'Direito de uso de imagem'
+  direito_imagem: 'Direito de uso de imagem',
 };
 
-export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: boolean; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState('checklist');
+export function OSCModal({
+  osc,
+  isOpen,
+  onClose,
+}: {
+  osc: OSC | null;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<TabKey>('checklist');
   const [novaObservacao, setNovaObservacao] = useState('');
   const [editedOSC, setEditedOSC] = useState<OSC | null>(osc);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
-    if (osc) {
-      setEditedOSC(osc);
-    } else {
-      setEditedOSC(null);
-    }
+    if (osc) setEditedOSC(osc);
+    else setEditedOSC(null);
   }, [osc]);
 
   if (!isOpen || !osc) return null;
@@ -47,15 +114,13 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
     const file = event.target.files?.[0];
     if (file) {
       setUploadingLogo(true);
-      // Simular upload - em produção seria uma chamada para API
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        // Aqui você salvaria a imagem no backend e atualizaria o estado
         console.log('Logo uploaded for OSC:', osc.id, result);
         setEditedOSC({
-          ...editedOSC!,
-          logo: result
+          ...editedOSC!, // garantido pq só renderiza com osc
+          logo: result,
         });
         setUploadingLogo(false);
       };
@@ -64,7 +129,6 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
   };
 
   const handleSave = () => {
-    // Implementar salvamento
     console.log('Salvando OSC:', editedOSC);
     onClose();
   };
@@ -73,21 +137,20 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
     if (novaObservacao.trim()) {
       setEditedOSC({
         ...editedOSC!,
-        observacoesCRM: [...(editedOSC?.observacoesCRM || []), novaObservacao]
+        observacoesCRM: [...(editedOSC?.observacoesCRM || []), novaObservacao],
       });
       setNovaObservacao('');
     }
   };
 
-  const toggleTag = (tag) => {
-    const currentTags = editedOSC?.tags || [];
+  const toggleTag = (tag: Tag) => {
+    const currentTags = (editedOSC?.tags as Tag[] | undefined) || [];
     const newTags = currentTags.includes(tag)
-      ? currentTags.filter(t => t !== tag)
-      : [...currentTags, tag];
-    
+      ? (currentTags.filter((t) => t !== tag) as Tag[])
+      : ([...currentTags, tag] as Tag[]);
     setEditedOSC({
       ...editedOSC!,
-      tags: newTags
+      tags: newTags,
     });
   };
 
@@ -102,8 +165,8 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
               <div className="relative group">
                 {editedOSC?.logo ? (
                   <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200">
-                    <img 
-                      src={editedOSC.logo} 
+                    <img
+                      src={editedOSC.logo}
                       alt={`Logo ${osc.name}`}
                       className="w-full h-full object-cover"
                     />
@@ -113,7 +176,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                     <Heart size={24} className="text-red-600" />
                   </div>
                 )}
-                
+
                 {/* Upload overlay */}
                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <label htmlFor="osc-logo-upload" className="cursor-pointer">
@@ -132,10 +195,10 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                   />
                 </div>
               </div>
-              
+
               <div>
                 <h2 className="text-xl font-bold text-gray-900">{osc.name}</h2>
-            <p className="text-sm text-gray-500">{osc.email}</p>
+                <p className="text-sm text-gray-500">{osc.email}</p>
               </div>
             </div>
           </div>
@@ -146,7 +209,11 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as TabKey)}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="checklist">Checklist</TabsTrigger>
               <TabsTrigger value="crm">CRM</TabsTrigger>
@@ -156,9 +223,10 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
             <TabsContent value="checklist" className="mt-6">
               <div className="space-y-6">
                 <h3 className="font-semibold text-gray-900">Checklist de Verificação</h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-4">
+                    {/* CNPJ ativo */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">CNPJ ativo na receita</span>
                       <div className="flex items-center gap-2">
@@ -167,15 +235,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.cnpjAtivo ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              cnpjAtivo: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                cnpjAtivo: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -188,6 +258,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* Fit objetivos */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Fit com objetivos CF</span>
                       <div className="flex items-center gap-2">
@@ -196,15 +267,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.fitObjetivos ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              fitObjetivos: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                fitObjetivos: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -217,6 +290,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* Verificação reputação */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Verificação reputação</span>
                       <div className="flex items-center gap-2">
@@ -225,15 +299,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.verificacaoReputacao ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              verificacaoReputacao: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                verificacaoReputacao: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -246,6 +322,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* Endereço confirmado */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Endereço confirmado</span>
                       <div className="flex items-center gap-2">
@@ -254,15 +331,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.enderecoConfirmado ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              enderecoConfirmado: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                enderecoConfirmado: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -277,6 +356,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                   </div>
 
                   <div className="space-y-4">
+                    {/* CNEP */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Pesquisado CNPJ CNEP</span>
                       <div className="flex items-center gap-2">
@@ -285,15 +365,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.pesquisadoCNEP ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              pesquisadoCNEP: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                pesquisadoCNEP: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -306,6 +388,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* CEPIM */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Pesquisado CNPJ CEPIM</span>
                       <div className="flex items-center gap-2">
@@ -314,15 +397,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.pesquisadoCEPIM ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              pesquisadoCEPIM: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                pesquisadoCEPIM: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -335,6 +420,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* CEIS */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <span className="text-sm font-medium">Pesquisado CNPJ CEIS</span>
                       <div className="flex items-center gap-2">
@@ -343,15 +429,17 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                         ) : (
                           <AlertCircle size={16} className="text-red-600" />
                         )}
-                        <Select 
+                        <Select
                           value={(editedOSC?.checklist?.pesquisadoCEIS ?? false) ? 'sim' : 'nao'}
-                          onValueChange={(value) => setEditedOSC({
-                            ...editedOSC,
-                            checklist: {
-                              ...editedOSC?.checklist,
-                              pesquisadoCEIS: value === 'sim'
-                            }
-                          })}
+                          onValueChange={(value) =>
+                            setEditedOSC({
+                              ...editedOSC!,
+                              checklist: {
+                                ...ensureChecklist(editedOSC?.checklist),
+                                pesquisadoCEIS: value === 'sim',
+                              },
+                            })
+                          }
                         >
                           <SelectTrigger className="w-20">
                             <SelectValue />
@@ -364,18 +452,21 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                       </div>
                     </div>
 
+                    {/* Email contato */}
                     <div>
                       <Label htmlFor="emailContato">Email de contato</Label>
-                      <Input 
+                      <Input
                         id="emailContato"
-                        value={editedOSC?.checklist?.emailContato || ''}
-                        onChange={(e) => setEditedOSC({
-                          ...editedOSC,
-                          checklist: {
-                            ...editedOSC?.checklist,
-                            emailContato: e.target.value
-                          }
-                        })}
+                        value={ensureChecklist(editedOSC?.checklist).emailContato}
+                        onChange={(e) =>
+                          setEditedOSC({
+                            ...editedOSC!,
+                            checklist: {
+                              ...ensureChecklist(editedOSC?.checklist),
+                              emailContato: e.target.value,
+                            },
+                          })
+                        }
                         placeholder="email@exemplo.com"
                       />
                     </div>
@@ -386,13 +477,13 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
                 <div>
                   <h4 className="font-medium text-gray-900 mb-3">Tags da OSC</h4>
                   <div className="flex flex-wrap gap-2">
-                    {tagOptions.map(tag => (
+                    {tagOptions.map((tag: Tag) => (
                       <Badge
                         key={tag}
-                        variant={editedOSC?.tags?.includes(tag) ? "default" : "outline"}
+                        variant={editedOSC?.tags?.includes(tag) ? 'default' : 'outline'}
                         className={`cursor-pointer ${
-                          editedOSC?.tags?.includes(tag) 
-                            ? 'bg-orange-100 text-orange-800 border-orange-300' 
+                          editedOSC?.tags?.includes(tag)
+                            ? 'bg-orange-100 text-orange-800 border-orange-300'
                             : 'hover:bg-gray-100'
                         }`}
                         onClick={() => toggleTag(tag)}
@@ -408,7 +499,7 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
             <TabsContent value="crm" className="mt-6">
               <div className="space-y-6">
                 <h3 className="font-semibold text-gray-900">Histórico CRM</h3>
-                
+
                 <div className="space-y-3">
                   {editedOSC?.observacoesCRM?.map((obs, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg">
@@ -437,32 +528,33 @@ export function OSCModal({ osc, isOpen, onClose }: { osc: OSC | null; isOpen: bo
             <TabsContent value="contato" className="mt-6">
               <div className="space-y-6">
                 <h3 className="font-semibold text-gray-900">Informações de Contato</h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <Label htmlFor="responsavel">Responsável</Label>
-                    <Input 
+                    <Input
                       id="responsavel"
                       value={editedOSC?.contato?.responsavel || ''}
-                      onChange={(e) => setEditedOSC({
-                        ...editedOSC!,
-                        contato: {
-                          ...editedOSC?.contato,
-                          responsavel: e.target.value
-                        }
-                      })}
+                      onChange={(e) =>
+                        setEditedOSC({
+                          ...editedOSC!,
+                          contato: {
+                            ...editedOSC?.contato,
+                            responsavel: e.target.value,
+                          },
+                        })
+                      }
                       placeholder="Nome do responsável"
                     />
                   </div>
 
                   <div>
                     <Label htmlFor="status">Status</Label>
-                    <Select 
+                    <Select
                       value={editedOSC?.status || 'ativo'}
-                      onValueChange={(value) => setEditedOSC({
-                        ...editedOSC!,
-                        status: value
-                      })}
+                      onValueChange={(value) =>
+                        setEditedOSC({ ...editedOSC!, status: value as OSCStatus })
+                      }                      
                     >
                       <SelectTrigger>
                         <SelectValue />

@@ -1,22 +1,62 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Calendar, Clock, MapPin, Package, User, Bell } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Calendar, Clock, Package, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { mockPrograms, mockLojas } from '@/lib/data';
+import { mockLojas } from '@/lib/data';
+
+/* ===================== Types ===================== */
+type Cliente = 'GPA' | 'Assaí' | 'Proença';
+type Estado = 'São Paulo' | 'Rio de Janeiro' | 'Minas Gerais';
+
+type Programa = { id: string; name: string; type: string };
+type Responsavel = { id: string; name: string; loja: string };
+
+type Loja = {
+  id: string;
+  nome: string;
+  bandeira: string;
+  cidade: string;
+  estado: string;
+  status: string;         // 'ativo' | ... (mantido flexível)
+  ultimaColeta: string;   // '-' | ISO date
+};
 
 interface NovaColetaModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const clientePrograms = {
-  'GPA': [
+interface LastCollectionData {
+  data: string;        // ISO
+  quantidade: number;  // kg
+}
+
+interface FormState {
+  cliente: Cliente | '';
+  programId: string;
+  estado: Estado | '';
+  cidade: string;
+  bandeira: string;
+  lojaId: string;
+  data: string;                 // yyyy-mm-dd
+  horario: string;              // HH:mm
+  responsavel: string;
+  quantidadePrevista: string;   // mantido como string para input controlado
+  observacoes: string;
+  notificarLoja: boolean;
+  notificarOSC: boolean;
+  notificarRegional: boolean;
+}
+
+/* ===================== Static data ===================== */
+const clientePrograms: Record<Cliente, Programa[]> = {
+  GPA: [
     { id: '1', name: 'Programa de parceria contra o desperdício', type: 'contra_desperdicio' },
   ],
   'Assaí': [
@@ -24,30 +64,31 @@ const clientePrograms = {
   ],
   'Proença': [
     { id: '4', name: 'Programa doação do bem', type: 'contra_desperdicio' },
-  ]
+  ],
 };
 
-const estadoCidades = {
+const estadoCidades: Record<Estado, string[]> = {
   'São Paulo': ['São Paulo', 'Guarulhos', 'Campinas', 'São Bernardo do Campo'],
   'Rio de Janeiro': ['Rio de Janeiro', 'Niterói', 'Duque de Caxias', 'Nova Iguaçu'],
-  'Minas Gerais': ['Belo Horizonte', 'Uberlândia', 'Contagem', 'Juiz de Fora']
+  'Minas Gerais': ['Belo Horizonte', 'Uberlândia', 'Contagem', 'Juiz de Fora'],
 };
 
-const clienteBandeiras = {
+const clienteBandeiras: Record<Cliente, string[]> = {
   'GPA': ['Extra', 'Pão de Açúcar'],
   'Assaí': ['Assaí'],
-  'Proença': ['Proença']
+  'Proença': ['Proença'],
 };
 
-const mockResponsaveis = [
+const mockResponsaveis: Responsavel[] = [
   { id: '1', name: 'João Silva', loja: 'Extra Hiper Vila Olímpia' },
   { id: '2', name: 'Maria Santos', loja: 'Pão de Açúcar Jardins' },
   { id: '3', name: 'Carlos Lima', loja: 'Assaí Atacadista Morumbi' },
-  { id: '4', name: 'Ana Costa', loja: 'Proença Centro' }
+  { id: '4', name: 'Ana Costa', loja: 'Proença Centro' },
 ];
 
+/* ===================== Component ===================== */
 export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     cliente: '',
     programId: '',
     estado: '',
@@ -61,12 +102,68 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
     observacoes: '',
     notificarLoja: false,
     notificarOSC: false,
-    notificarRegional: false
+    notificarRegional: false,
   });
-  const [lastCollectionData, setLastCollectionData] = useState(null);
+
+  const [lastCollectionData, setLastCollectionData] = useState<LastCollectionData | null>(null);
 
   if (!isOpen) return null;
 
+  /* ------- Helpers & derived data ------- */
+  const availablePrograms: Programa[] =
+    formData.cliente ? clientePrograms[formData.cliente] : [];
+
+  const availableCidades: string[] =
+    formData.estado ? estadoCidades[formData.estado] : [];
+
+  const availableBandeiras: string[] =
+    formData.cliente ? clienteBandeiras[formData.cliente] : [];
+
+  // tipar mockLojas localmente para evitar "any"
+  const allLojas = (mockLojas as unknown as Loja[]) || [];
+
+  const filteredLojas: Loja[] = allLojas.filter((loja) => {
+    if (formData.bandeira && loja.bandeira !== formData.bandeira) return false;
+    if (formData.cidade && loja.cidade !== formData.cidade) return false;
+    if (formData.estado && loja.estado !== formData.estado) return false;
+    return true;
+  });
+
+  // Priorizar lojas sem doação (status !== 'ativo')
+  const lojasOrdenadas: Loja[] = [...filteredLojas].sort((a, b) => {
+    if (a.status !== 'ativo' && b.status === 'ativo') return -1;
+    if (a.status === 'ativo' && b.status !== 'ativo') return 1;
+    return 0;
+  });
+
+  const availableResponsaveis: Responsavel[] = formData.lojaId
+    ? mockResponsaveis.filter(
+        (r) => r.loja === filteredLojas.find((l) => l.id === formData.lojaId)?.nome
+      )
+    : [];
+
+  function getLastCollectionData(lojaId: string): LastCollectionData | null {
+    const loja = allLojas.find((l) => l.id === lojaId);
+    // se tiver data válida (diferente de '-'), retornar quantidade mockada
+    return loja && loja.ultimaColeta !== '-' ? { data: loja.ultimaColeta, quantidade: 75 } : null;
+  }
+
+  function handleUseLastAmount() {
+    if (lastCollectionData) {
+      setFormData({ ...formData, quantidadePrevista: String(lastCollectionData.quantidade) });
+    }
+  }
+
+  useEffect(() => {
+    if (formData.lojaId) {
+      setLastCollectionData(getLastCollectionData(formData.lojaId));
+    } else {
+      setLastCollectionData(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.lojaId]);
+
+  /* ------- Submit ------- */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Nova coleta:', formData);
@@ -86,37 +183,11 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
       observacoes: '',
       notificarLoja: false,
       notificarOSC: false,
-      notificarRegional: false
+      notificarRegional: false,
     });
   };
 
-  const availablePrograms = formData.cliente ? clientePrograms[formData.cliente] || [] : [];
-  const availableCidades = formData.estado ? estadoCidades[formData.estado] || [] : [];
-  const availableBandeiras = formData.cliente ? clienteBandeiras[formData.cliente] || [] : [];
-  
-  // Filter lojas based on selections
-  const filteredLojas = mockLojas.filter(loja => {
-    if (formData.bandeira && loja.bandeira !== formData.bandeira) return false;
-    if (formData.cidade && loja.cidade !== formData.cidade) return false;
-    if (formData.estado && loja.estado !== formData.estado) return false;
-    return true;
-  });
-
-  // Prioritize lojas sem doação (status !== 'ativo')
-  const lojasOrdenadas = [...filteredLojas].sort((a, b) => {
-    if (a.status !== 'ativo' && b.status === 'ativo') return -1;
-    if (a.status === 'ativo' && b.status !== 'ativo') return 1;
-    return 0;
-  });
-
-  const availableResponsaveis = formData.lojaId 
-    ? mockResponsaveis.filter(r => r.loja === filteredLojas.find(l => l.id === formData.lojaId)?.nome)
-    : [];
-
-  const getLastCollectionData = (lojaId) => {
-    const loja = mockLojas.find(l => l.id === lojaId);
-    return loja?.ultimaColeta !== '-' ? { data: loja.ultimaColeta, quantidade: 75 } : null;
-  };
+  /* ===================== UI ===================== */
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -141,21 +212,23 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
           {/* Seleção Hierárquica */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 rethink-sans">Seleção de Local</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               {/* Cliente */}
               <div>
                 <Label htmlFor="cliente" className="rethink-sans">Cliente</Label>
-                <Select 
-                  value={formData.cliente} 
-                  onValueChange={(value) => setFormData({
-                    ...formData, 
-                    cliente: value,
-                    programId: '',
-                    bandeira: '',
-                    lojaId: '',
-                    responsavel: ''
-                  })}
+                <Select
+                  value={formData.cliente}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      cliente: value as Cliente,
+                      programId: '',
+                      bandeira: '',
+                      lojaId: '',
+                      responsavel: '',
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o cliente" />
@@ -171,16 +244,16 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               {/* Programa */}
               <div>
                 <Label htmlFor="programa" className="rethink-sans">Programa</Label>
-                <Select 
-                  value={formData.programId} 
-                  onValueChange={(value) => setFormData({...formData, programId: value})}
+                <Select
+                  value={formData.programId}
+                  onValueChange={(value) => setFormData({ ...formData, programId: value })}
                   disabled={!formData.cliente}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o programa" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availablePrograms.map(program => (
+                    {availablePrograms.map((program) => (
                       <SelectItem key={program.id} value={program.id}>
                         {program.name}
                       </SelectItem>
@@ -192,15 +265,17 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               {/* Estado */}
               <div>
                 <Label htmlFor="estado" className="rethink-sans">Estado</Label>
-                <Select 
-                  value={formData.estado} 
-                  onValueChange={(value) => setFormData({
-                    ...formData, 
-                    estado: value,
-                    cidade: '',
-                    lojaId: '',
-                    responsavel: ''
-                  })}
+                <Select
+                  value={formData.estado}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      estado: value as Estado,
+                      cidade: '',
+                      lojaId: '',
+                      responsavel: '',
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o estado" />
@@ -216,21 +291,23 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               {/* Cidade */}
               <div>
                 <Label htmlFor="cidade" className="rethink-sans">Cidade</Label>
-                <Select 
-                  value={formData.cidade} 
-                  onValueChange={(value) => setFormData({
-                    ...formData, 
-                    cidade: value,
-                    lojaId: '',
-                    responsavel: ''
-                  })}
+                <Select
+                  value={formData.cidade}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      cidade: value,
+                      lojaId: '',
+                      responsavel: '',
+                    })
+                  }
                   disabled={!formData.estado}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a cidade" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableCidades.map(cidade => (
+                    {availableCidades.map((cidade) => (
                       <SelectItem key={cidade} value={cidade}>
                         {cidade}
                       </SelectItem>
@@ -242,21 +319,23 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               {/* Bandeira */}
               <div>
                 <Label htmlFor="bandeira" className="rethink-sans">Bandeira</Label>
-                <Select 
-                  value={formData.bandeira} 
-                  onValueChange={(value) => setFormData({
-                    ...formData, 
-                    bandeira: value,
-                    lojaId: '',
-                    responsavel: ''
-                  })}
+                <Select
+                  value={formData.bandeira}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      bandeira: value,
+                      lojaId: '',
+                      responsavel: '',
+                    })
+                  }
                   disabled={!formData.cliente}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a bandeira" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableBandeiras.map(bandeira => (
+                    {availableBandeiras.map((bandeira) => (
                       <SelectItem key={bandeira} value={bandeira}>
                         {bandeira}
                       </SelectItem>
@@ -268,20 +347,22 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               {/* Loja */}
               <div>
                 <Label htmlFor="loja" className="rethink-sans">Loja</Label>
-                <Select 
-                  value={formData.lojaId} 
-                  onValueChange={(value) => setFormData({
-                    ...formData, 
-                    lojaId: value,
-                    responsavel: ''
-                  })}
+                <Select
+                  value={formData.lojaId}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      lojaId: value,
+                      responsavel: '',
+                    })
+                  }
                   disabled={!formData.bandeira}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a loja" />
                   </SelectTrigger>
                   <SelectContent>
-                    {lojasOrdenadas.map(loja => (
+                    {lojasOrdenadas.map((loja) => (
                       <SelectItem key={loja.id} value={loja.id}>
                         <div className="flex items-center justify-between w-full">
                           <span>{loja.nome}</span>
@@ -302,17 +383,17 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
           {/* Data e Horário */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 rethink-sans">Agendamento</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="data" className="rethink-sans">Data da Coleta</Label>
                 <div className="relative">
-                  <Calendar size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <Input 
+                  <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Input
                     id="data"
                     type="date"
                     value={formData.data}
-                    onChange={(e) => setFormData({...formData, data: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, data: e.target.value })}
                     className="pl-10"
                     required
                   />
@@ -322,12 +403,12 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               <div>
                 <Label htmlFor="horario" className="rethink-sans">Horário</Label>
                 <div className="relative">
-                  <Clock size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <Input 
+                  <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Input
                     id="horario"
                     type="time"
                     value={formData.horario}
-                    onChange={(e) => setFormData({...formData, horario: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, horario: e.target.value })}
                     className="pl-10"
                     required
                   />
@@ -339,20 +420,20 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
           {/* Responsável e Quantidade */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 rethink-sans">Detalhes da Coleta</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="responsavel" className="rethink-sans">Responsável</Label>
-                <Select 
-                  value={formData.responsavel} 
-                  onValueChange={(value) => setFormData({...formData, responsavel: value})}
+                <Select
+                  value={formData.responsavel}
+                  onValueChange={(value) => setFormData({ ...formData, responsavel: value })}
                   disabled={!formData.lojaId}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o responsável" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableResponsaveis.map(responsavel => (
+                    {availableResponsaveis.map((responsavel) => (
                       <SelectItem key={responsavel.id} value={responsavel.name}>
                         {responsavel.name}
                       </SelectItem>
@@ -364,18 +445,19 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               <div>
                 <Label htmlFor="quantidade" className="rethink-sans">Quantidade Prevista (kg)</Label>
                 <div className="relative">
-                  <Package size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <Input 
+                  <Package size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Input
                     id="quantidade"
                     type="number"
                     value={formData.quantidadePrevista}
-                    onChange={(e) => setFormData({...formData, quantidadePrevista: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, quantidadePrevista: e.target.value })}
                     placeholder="0"
                     className="pl-10"
                     min="0"
                     required
                   />
                 </div>
+
                 {lastCollectionData && (
                   <div className="mt-2">
                     <Button
@@ -385,7 +467,8 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
                       onClick={handleUseLastAmount}
                       className="text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                     >
-                      Usar última coleta: {lastCollectionData.quantidade}kg ({new Date(lastCollectionData.data).toLocaleDateString('pt-BR')})
+                      Usar última coleta: {lastCollectionData.quantidade}kg (
+                      {new Date(lastCollectionData.data).toLocaleDateString('pt-BR')})
                     </Button>
                   </div>
                 )}
@@ -396,13 +479,15 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
           {/* Notificações */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 rethink-sans">Notificações</h3>
-            
+
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Checkbox 
+                <Checkbox
                   id="notificarLoja"
                   checked={formData.notificarLoja}
-                  onCheckedChange={(checked) => setFormData({...formData, notificarLoja: checked})}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, notificarLoja: Boolean(checked) })
+                  }
                 />
                 <Label htmlFor="notificarLoja" className="hedvig-letters-sans flex items-center">
                   <Bell size={14} className="mr-2 text-blue-600" />
@@ -411,10 +496,12 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Checkbox 
+                <Checkbox
                   id="notificarOSC"
                   checked={formData.notificarOSC}
-                  onCheckedChange={(checked) => setFormData({...formData, notificarOSC: checked})}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, notificarOSC: Boolean(checked) })
+                  }
                 />
                 <Label htmlFor="notificarOSC" className="hedvig-letters-sans flex items-center">
                   <Bell size={14} className="mr-2 text-green-600" />
@@ -423,10 +510,12 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
               </div>
 
               <div className="flex items-center space-x-2">
-                <Checkbox 
+                <Checkbox
                   id="notificarRegional"
                   checked={formData.notificarRegional}
-                  onCheckedChange={(checked) => setFormData({...formData, notificarRegional: checked})}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, notificarRegional: Boolean(checked) })
+                  }
                 />
                 <Label htmlFor="notificarRegional" className="hedvig-letters-sans flex items-center">
                   <Bell size={14} className="mr-2 text-orange-600" />
@@ -439,10 +528,10 @@ export function NovaColetaModal({ isOpen, onClose }: NovaColetaModalProps) {
           {/* Observações */}
           <div>
             <Label htmlFor="observacoes" className="rethink-sans">Observações</Label>
-            <Textarea 
+            <Textarea
               id="observacoes"
               value={formData.observacoes}
-              onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
               placeholder="Informações adicionais sobre a coleta..."
               rows={3}
               className="hedvig-letters-sans"

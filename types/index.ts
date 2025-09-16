@@ -1,3 +1,9 @@
+// types.ts
+
+/* =========================
+ * Domínios principais
+ * ========================= */
+
 export interface Loja {
   id: string;
   nome: string;
@@ -12,7 +18,7 @@ export interface Loja {
   email: string;
   status: 'ativo' | 'verificar' | 'inativo' | 'encerrada' | 'backlog';
   ultimaColeta: string;
-  programas: string[];
+  programas: string[]; // IDs/nomes de programas ligados à loja
   totalArrecadado: number;
   logo?: string;
   codigoGPA?: string;
@@ -57,6 +63,10 @@ export interface OSC {
   parcerias: string[];
 }
 
+/* =========================
+ * Programas
+ * ========================= */
+
 export interface Program {
   id: string;
   name: string;
@@ -75,6 +85,17 @@ export interface Program {
   notDonatedItems?: NotDonatedItem[];
 }
 
+/**
+ * Versão de Program usada nas listas/grids do front,
+ * que também carrega metadados de exibição.
+ */
+export type ProgramUI = Program & {
+  bandeira: string;
+  cliente: string;
+  estado: string;
+  createdAt: string;
+};
+
 export interface NotDonatedItem {
   item: string;
   motivo: string;
@@ -82,28 +103,43 @@ export interface NotDonatedItem {
   data: string;
 }
 
+/* =========================
+ * Parceiros (OSC/Loja) para Kanban/CRM
+ * ========================= */
+
+export type PartnerStage =
+  | 'ativo'
+  | 'verificar'
+  | 'inativo'
+  | 'encerrada'
+  | 'backlog';
+
 export interface Partner {
   id: string;
   name: string;
   type: 'loja' | 'osc';
   email: string;
   phone: string;
-  program: string;
-  stage: 'ativo' | 'verificar' | 'inativo' | 'encerrada';
+  program: string; // ex.: 'contra_desperdicio'
+  stage: PartnerStage;
   lastContact: string;
   donations: number;
   status: 'active' | 'inactive';
   bandeira: string;
   regional: string;
+
+  // Campos específicos por tipo (alguns opcionais):
   logo?: string;
-  codigo?: string;
-  endereco?: string;
-  gerente?: string;
-  cnpj?: string;
-  programas?: number;
-  campanhas?: number;
-  numeroLojas?: number;
+  codigo?: string;    // lojas
+  endereco?: string;  // lojas
+  gerente?: string;   // lojas
+  cnpj?: string;      // OSC
+  programas?: number; // OSC
+  campanhas?: number; // OSC
+  numeroLojas?: number; // OSC
   confianca?: 'muito_confiavel' | 'confiavel' | 'pouco_confiavel';
+
+  // Auxiliares
   tags?: string[];
   lastInteraction?: {
     type: 'ligacao' | 'email' | 'whatsapp' | 'sms' | 'visita';
@@ -121,10 +157,21 @@ export interface Partner {
     amount: number;
     unit: string;
   };
+
+  // Agenda opcional (usada em PartnerModal quando existir)
+  schedule?: {
+    frequency: string;
+    nextCollection: string;
+  };
+
   nfs: any[];
   interactions: any[];
   idCF?: string;
 }
+
+/* =========================
+ * Parcerias e props
+ * ========================= */
 
 export interface Parceria {
   id: string;

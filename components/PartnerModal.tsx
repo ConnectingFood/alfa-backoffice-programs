@@ -1,19 +1,45 @@
 'use client';
 
 import { useState } from 'react';
-import { Partner, stageConfig, programConfig } from '@/lib/data';
-import { X, Phone, Mail, Calendar, FileText, MessageSquare, ExternalLink, Plus, Clock, Upload, BarChart3, Camera, Heart, Building } from 'lucide-react';
+import { stageConfig, programConfig } from '@/lib/data';
+import {
+  X,
+  Phone,
+  Mail,
+  Calendar,
+  FileText,
+  MessageSquare,
+  ExternalLink,
+  Plus,
+  Clock,
+  Upload,
+  BarChart3,
+  Camera,
+  Heart,
+  Building,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NovaInteracaoModal } from './NovaInteracaoModal';
+import type { Partner } from '@/types';
 
 interface PartnerModalProps {
   partner: Partner | null;
   isOpen: boolean;
   onClose: () => void;
 }
+
+type StageKey = keyof typeof stageConfig;
+type ProgramKey = keyof typeof programConfig;
+
+// Adiciona 'schedule' como opcional só para esta tela, sem mudar seus tipos globais.
+type PartnerWithOptionalSchedule = Partner & {
+  schedule?: {
+    frequency: string;
+    nextCollection: string | Date;
+  };
+};
 
 export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
   const [isNovaInteracaoModalOpen, setIsNovaInteracaoModalOpen] = useState(false);
@@ -23,11 +49,10 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
     const file = event.target.files?.[0];
     if (file && partner) {
       setUploadingLogo(true);
-      // Simular upload - em produção seria uma chamada para API
+      // Simulação de upload
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        // Aqui você salvaria a imagem no backend
         console.log('Logo uploaded for partner:', partner.id, result);
         setUploadingLogo(false);
       };
@@ -37,8 +62,11 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
 
   if (!isOpen || !partner) return null;
 
-  const stage = stageConfig[partner.stage];
-  const program = programConfig[partner.program];
+  // Narrow local para acessar schedule de forma segura
+  const p = partner as PartnerWithOptionalSchedule;
+
+  const stage = stageConfig[partner.stage as StageKey];
+  const program = programConfig[partner.program as ProgramKey];
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -51,16 +79,18 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
               <div className="relative group">
                 {partner.logo ? (
                   <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200">
-                    <img 
-                      src={partner.logo} 
+                    <img
+                      src={partner.logo}
                       alt={`Logo ${partner.name}`}
                       className="w-full h-full object-cover"
                     />
                   </div>
                 ) : (
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
-                    partner.type === 'osc' ? 'bg-red-100' : 'bg-blue-100'
-                  }`}>
+                  <div
+                    className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                      partner.type === 'osc' ? 'bg-red-100' : 'bg-blue-100'
+                    }`}
+                  >
                     {partner.type === 'osc' ? (
                       <Heart size={24} className="text-red-600" />
                     ) : (
@@ -68,7 +98,7 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                     )}
                   </div>
                 )}
-                
+
                 {/* Upload overlay */}
                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <label htmlFor="partner-logo-upload" className="cursor-pointer">
@@ -87,18 +117,24 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                   />
                 </div>
               </div>
-              
+
               <div>
-              <h2 className="text-xl font-bold text-gray-900">{partner.name}</h2>
-              <Badge className={stage.color}>
-                {stage.icon} {stage.label}
-              </Badge>
-              <Badge className={program.color}>
-                {program.label}
-              </Badge>
+                <h2 className="text-xl font-bold text-gray-900">{partner.name}</h2>
+                <div className="flex gap-2 mt-1">
+                  <Badge className={stage?.color ?? 'bg-gray-100 text-gray-800'}>
+                    {/* stage.icon é provavelmente um elemento JSX pronto */}
+                    {stage?.icon ? <span className="mr-1 inline-flex">{stage.icon}</span> : null}
+                    {stage?.label ?? partner.stage}
+                  </Badge>
+                  <Badge className={program?.color ?? 'bg-gray-100 text-gray-800'}>
+                    {program?.label ?? partner.program}
+                  </Badge>
+                </div>
               </div>
             </div>
-            <p className="text-sm text-gray-500">{partner.bandeira} • {partner.regional}</p>
+            <p className="text-sm text-gray-500">
+              {partner.bandeira} • {partner.regional}
+            </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             <X size={20} />
@@ -125,11 +161,17 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                       <p className="font-medium text-gray-900">{contact.name}</p>
                       <p className="text-sm text-gray-600 mb-2">{contact.role}</p>
                       <div className="flex items-center gap-4 text-sm">
-                        <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-blue-600 hover:text-blue-700">
+                        <a
+                          href={`tel:${contact.phone}`}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                        >
                           <Phone size={14} />
                           {contact.phone}
                         </a>
-                        <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-blue-600 hover:text-blue-700">
+                        <a
+                          href={`mailto:${contact.email}`}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                        >
                           <Mail size={14} />
                           {contact.email}
                         </a>
@@ -140,16 +182,19 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
 
                 {/* Schedule & Metrics */}
                 <div className="space-y-4">
-                  {partner.schedule && (
+                  {p.schedule && (
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-3">Agenda de Coleta</h3>
                       <div className="bg-blue-50 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <Calendar size={16} className="text-blue-600" />
-                          <span className="font-medium text-blue-900">Frequência: {partner.schedule.frequency}</span>
+                          <span className="font-medium text-blue-900">
+                            Frequência: {p.schedule.frequency}
+                          </span>
                         </div>
                         <p className="text-sm text-blue-700">
-                          Próxima coleta: {new Date(partner.schedule.nextCollection).toLocaleDateString('pt-BR')}
+                          Próxima coleta:{' '}
+                          {new Date(p.schedule.nextCollection).toLocaleDateString('pt-BR')}
                         </p>
                       </div>
                     </div>
@@ -188,10 +233,18 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                   <div key={interaction.id} className="flex gap-4 p-4 bg-gray-50 rounded-lg">
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        {interaction.type === 'ligacao' && <Phone size={14} className="text-blue-600" />}
-                        {interaction.type === 'whatsapp' && <MessageSquare size={14} className="text-green-600" />}
-                        {interaction.type === 'email' && <Mail size={14} className="text-purple-600" />}
-                        {interaction.type === 'visita' && <Clock size={14} className="text-orange-600" />}
+                        {interaction.type === 'ligacao' && (
+                          <Phone size={14} className="text-blue-600" />
+                        )}
+                        {interaction.type === 'whatsapp' && (
+                          <MessageSquare size={14} className="text-green-600" />
+                        )}
+                        {interaction.type === 'email' && (
+                          <Mail size={14} className="text-purple-600" />
+                        )}
+                        {interaction.type === 'visita' && (
+                          <Clock size={14} className="text-orange-600" />
+                        )}
                       </div>
                     </div>
                     <div className="flex-1">
@@ -238,9 +291,7 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                           {new Date(nf.date).toLocaleDateString('pt-BR')}
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-700">{nf.cfop}</td>
-                        <td className="py-3 px-4 text-sm text-gray-700">
-                          R$ {nf.value.toLocaleString()}
-                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-700">R$ {nf.value.toLocaleString()}</td>
                         <td className="py-3 px-4">
                           <Badge variant="secondary">{nf.status}</Badge>
                         </td>
@@ -265,7 +316,7 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                     Exportar Dados
                   </Button>
                 </div>
-                
+
                 {/* Métricas principais */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-blue-50 rounded-lg p-4">
@@ -285,7 +336,7 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                   </div>
                 </div>
 
-                {/* Gráfico de performance */}
+                {/* Gráfico de performance (placeholder) */}
                 <div className="bg-white border rounded-lg p-6">
                   <h4 className="font-medium text-gray-900 mb-4">Performance Mensal</h4>
                   <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
@@ -323,13 +374,11 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
                     </div>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 mb-6">
-                  Dashboards integrados com métricas de performance
-                </p>
+
+                <p className="text-sm text-gray-600 mb-6">Dashboards integrados com métricas de performance</p>
+
                 <div className="bg-gray-100 rounded-lg p-8 border-2 border-dashed border-gray-300">
-                  <p className="text-gray-500">
-                    [Power BI Embed será carregado aqui]
-                  </p>
+                  <p className="text-gray-500">[Power BI Embed será carregado aqui]</p>
                   <Button className="mt-4" variant="outline">
                     <ExternalLink size={16} className="mr-2" />
                     Abrir no Power BI
@@ -342,8 +391,8 @@ export function PartnerModal({ partner, isOpen, onClose }: PartnerModalProps) {
 
         {/* Nova Interação Modal */}
         {isNovaInteracaoModalOpen && (
-          <NovaInteracaoModal 
-            partner={partner}
+          <NovaInteracaoModal
+            partner={partner!}
             isOpen={isNovaInteracaoModalOpen}
             onClose={() => setIsNovaInteracaoModalOpen(false)}
           />

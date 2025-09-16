@@ -13,34 +13,46 @@ import { ParceriasModal } from './ParceriasModal';
 import { NovaOSCModal } from './NovaOSCModal';
 import { OSC } from '@/types';
 
+/* ===== Tipos auxiliares (derivados dos configs e do domínio) ===== */
+type OSCStatus = keyof typeof oscStatusConfig;             // ex.: 'ativo' | 'verificar' | 'inativo' | 'backlog'
+type ConfiancaKey = keyof typeof confiancaConfig;          // conforme seu arquivo de dados
+type OSCTipo = 'normal' | 'natal_solidariedade';           // ajuste se houver outros
+
 interface OSCsListProps {
   oscs: OSC[];
 }
 
 export function OSCsList({ oscs }: OSCsListProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [tipoFilter, setTipoFilter] = useState('all');
-  const [selectedOSC, setSelectedOSC] = useState(null);
-  const [isOSCModalOpen, setIsOSCModalOpen] = useState(false);
-  const [parceriasOSC, setParceriasOSC] = useState(null);
-  const [isParceriasModalOpen, setIsParceriasModalOpen] = useState(false);
-  const [isNovaOSCModalOpen, setIsNovaOSCModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | OSCStatus>('all');
+  const [tipoFilter, setTipoFilter] = useState<'all' | OSCTipo>('all');
+  const [selectedOSC, setSelectedOSC] = useState<OSC | null>(null);
+  const [isOSCModalOpen, setIsOSCModalOpen] = useState<boolean>(false);
+  // importante: usar undefined no estado e coalescer na prop
+  const [parceriasOSC, setParceriasOSC] = useState<OSC | undefined>(undefined);
+  const [isParceriasModalOpen, setIsParceriasModalOpen] = useState<boolean>(false);
+  const [isNovaOSCModalOpen, setIsNovaOSCModalOpen] = useState<boolean>(false);
 
-  const filteredOSCs = oscs.filter(osc => {
-    const matchesSearch = osc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         osc.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || osc.status === statusFilter;
-    const matchesTipo = tipoFilter === 'all' || osc.tipo === tipoFilter;
+  const filteredOSCs = oscs.filter((osc: OSC) => {
+    const matchesSearch =
+      osc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      osc.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === 'all' || (osc.status as OSCStatus) === statusFilter;
+
+    const matchesTipo =
+      tipoFilter === 'all' || (osc.tipo as OSCTipo) === tipoFilter;
+
     return matchesSearch && matchesStatus && matchesTipo;
   });
 
-  const handleVerOSC = (osc) => {
+  const handleVerOSC = (osc: OSC) => {
     setSelectedOSC(osc);
     setIsOSCModalOpen(true);
   };
 
-  const handleParcerias = (osc) => {
+  const handleParcerias = (osc: OSC) => {
     setParceriasOSC(osc);
     setIsParceriasModalOpen(true);
   };
@@ -48,6 +60,7 @@ export function OSCsList({ oscs }: OSCsListProps) {
   const handleNovaOSC = () => {
     setIsNovaOSCModalOpen(true);
   };
+
   return (
     <TooltipProvider>
       <div className="ml-72 p-6">
@@ -70,10 +83,13 @@ export function OSCsList({ oscs }: OSCsListProps) {
               <Filter size={16} className="text-gray-500" />
               <span className="text-sm font-medium text-gray-700">Filtros:</span>
             </div>
-            
+
             <div className="flex-1 max-w-md">
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
                 <Input
                   placeholder="Buscar por nome..."
                   value={searchTerm}
@@ -83,7 +99,10 @@ export function OSCsList({ oscs }: OSCsListProps) {
               </div>
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setStatusFilter(v as 'all' | OSCStatus)}
+            >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Todos os Status" />
               </SelectTrigger>
@@ -96,7 +115,10 @@ export function OSCsList({ oscs }: OSCsListProps) {
               </SelectContent>
             </Select>
 
-            <Select value={tipoFilter} onValueChange={setTipoFilter}>
+            <Select
+              value={tipoFilter}
+              onValueChange={(v) => setTipoFilter(v as 'all' | OSCTipo)}
+            >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Tipo de OSC" />
               </SelectTrigger>
@@ -127,18 +149,29 @@ export function OSCsList({ oscs }: OSCsListProps) {
                 </tr>
               </thead>
               <tbody>
-                {filteredOSCs.map((osc, index) => {
-                  const statusConfig = oscStatusConfig[osc.status];
-                  const confiancaConf = confiancaConfig[osc.confianca];
-                  
+                {filteredOSCs.map((osc: OSC, index: number) => {
+                  const statusKey = osc.status as OSCStatus;
+                  const confiancaKey = osc.confianca as ConfiancaKey;
+
+                  const statusConfig = oscStatusConfig[statusKey];
+                  const confiancaConf = confiancaConfig[confiancaKey];
+
                   return (
-                    <tr key={osc.id} className={`border-b border-gray-100 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <tr
+                      key={osc.id}
+                      className={`border-b border-gray-100 hover:bg-gray-50 ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                      }`}
+                    >
                       <td className="py-4 px-4">
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-gray-900 text-sm">{osc.name}</p>
                             {osc.tipo === 'natal_solidariedade' && (
-                              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-red-50 text-red-700 border-red-200"
+                              >
                                 Natal
                               </Badge>
                             )}
@@ -155,7 +188,9 @@ export function OSCsList({ oscs }: OSCsListProps) {
                       <td className="py-4 px-4 text-sm text-gray-700 text-center font-medium">
                         {osc.arrecadado.toLocaleString()}
                       </td>
-                      <td className="py-4 px-4 text-sm text-gray-700 text-center">{osc.numeroLojas}</td>
+                      <td className="py-4 px-4 text-sm text-gray-700 text-center">
+                        {osc.numeroLojas}
+                      </td>
                       <td className="py-4 px-4">
                         <Tooltip>
                           <TooltipTrigger>
@@ -170,30 +205,32 @@ export function OSCsList({ oscs }: OSCsListProps) {
                         </Tooltip>
                       </td>
                       <td className="py-4 px-4 text-sm text-gray-700">
-                        {osc.ultimaColeta !== '-' ? new Date(osc.ultimaColeta).toLocaleDateString('pt-BR') : '-'}
+                        {osc.ultimaColeta !== '-'
+                          ? new Date(osc.ultimaColeta).toLocaleDateString('pt-BR')
+                          : '-'}
                       </td>
                       <td className="py-4 px-4 text-sm text-gray-700">
                         {new Date(osc.cadastroAtualizadoEm).toLocaleDateString('pt-BR')}
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                             onClick={() => handleVerOSC(osc)}
                           >
                             <Eye size={14} className="mr-1" />
                             Ver
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                           className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                           onClick={() => handleParcerias(osc)}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => handleParcerias(osc)}
                           >
-                           <Link size={14} className="mr-1" />
-                           Parcerias
+                            <Link size={14} className="mr-1" />
+                            Parcerias
                           </Button>
                         </div>
                       </td>
@@ -224,20 +261,23 @@ export function OSCsList({ oscs }: OSCsListProps) {
         )}
 
         {/* Modals */}
-        <OSCModal 
+        <OSCModal
           osc={selectedOSC}
           isOpen={isOSCModalOpen}
           onClose={() => setIsOSCModalOpen(false)}
         />
-        
-       <ParceriasModal 
-         entity={parceriasOSC}
-         type="osc"
-         isOpen={isParceriasModalOpen}
-         onClose={() => setIsParceriasModalOpen(false)}
+
+        <ParceriasModal
+          entity={parceriasOSC ?? undefined}
+          type="osc"
+          isOpen={isParceriasModalOpen}
+          onClose={() => {
+            setIsParceriasModalOpen(false);
+            setParceriasOSC(undefined);
+          }}
         />
 
-        <NovaOSCModal 
+        <NovaOSCModal
           isOpen={isNovaOSCModalOpen}
           onClose={() => setIsNovaOSCModalOpen(false)}
         />

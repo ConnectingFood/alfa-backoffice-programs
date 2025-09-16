@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Filter, Eye, Plus, MapPin, Phone, Mail, Users, Link } from 'lucide-react';
+import { Search, Filter, Eye, Plus, MapPin, Phone, Link } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,20 +11,27 @@ import { LojaModal } from './LojaModal';
 import { ParceriasModal } from './ParceriasModal';
 import { Loja } from '@/types';
 
-export function LojasList() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [bandeiraFilter, setBandeiraFilter] = useState('all');
-  const [selectedLoja, setSelectedLoja] = useState<Loja | null>(null);
-  const [isLojaModalOpen, setIsLojaModalOpen] = useState(false);
-  const [parceriasLoja, setParceriasLoja] = useState<Loja | null>(null);
-  const [isParceriasModalOpen, setIsParceriasModalOpen] = useState(false);
+/* ===== Tipos auxiliares ===== */
+type LojaStatusKey = keyof typeof lojaStatusConfig; // ex.: 'ativo' | 'verificar' | 'inativo' | 'encerrada' | 'backlog'
+type Bandeira = 'Extra' | 'Pão de Açúcar' | 'Assaí';
 
-  const filteredLojas = mockLojas.filter(loja => {
-    const matchesSearch = loja.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         loja.gerente.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || loja.status === statusFilter;
-    const matchesBandeira = bandeiraFilter === 'all' || loja.bandeira === bandeiraFilter;
+export function LojasList() {
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | LojaStatusKey>('all');
+  const [bandeiraFilter, setBandeiraFilter] = useState<'all' | Bandeira>('all');
+  const [selectedLoja, setSelectedLoja] = useState<Loja | null>(null);
+  const [isLojaModalOpen, setIsLojaModalOpen] = useState<boolean>(false);
+  const [parceriasLoja, setParceriasLoja] = useState<Loja | undefined>(undefined);
+  const [isParceriasModalOpen, setIsParceriasModalOpen] = useState<boolean>(false);
+
+  const filteredLojas = mockLojas.filter((loja: Loja) => {
+    const matchesSearch =
+      loja.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loja.gerente.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' || (loja.status as LojaStatusKey) === statusFilter;
+    const matchesBandeira = bandeiraFilter === 'all' || (loja.bandeira as Bandeira) === bandeiraFilter;
+
     return matchesSearch && matchesStatus && matchesBandeira;
   });
 
@@ -32,7 +39,6 @@ export function LojasList() {
     setSelectedLoja(loja);
     setIsLojaModalOpen(true);
   };
-
 
   const handleParcerias = (loja: Loja) => {
     setParceriasLoja(loja);
@@ -60,7 +66,7 @@ export function LojasList() {
             <Filter size={16} className="text-gray-500" />
             <span className="text-sm font-medium text-gray-700">Filtros:</span>
           </div>
-          
+
           <div className="flex-1 max-w-md">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -73,7 +79,7 @@ export function LojasList() {
             </div>
           </div>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as 'all' | LojaStatusKey)}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Todos os Status" />
             </SelectTrigger>
@@ -87,7 +93,7 @@ export function LojasList() {
             </SelectContent>
           </Select>
 
-          <Select value={bandeiraFilter} onValueChange={setBandeiraFilter}>
+          <Select value={bandeiraFilter} onValueChange={(v) => setBandeiraFilter(v as 'all' | Bandeira)}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Todas as Bandeiras" />
             </SelectTrigger>
@@ -119,11 +125,17 @@ export function LojasList() {
               </tr>
             </thead>
             <tbody>
-              {filteredLojas.map((loja, index) => {
-                const statusConf = lojaStatusConfig[loja.status];
-                
+              {filteredLojas.map((loja: Loja, index: number) => {
+                const statusKey = loja.status as LojaStatusKey;
+                const statusConf = lojaStatusConfig[statusKey];
+
                 return (
-                  <tr key={loja.id} className={`border-b border-gray-100 hover:bg-gray-50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                  <tr
+                    key={loja.id}
+                    className={`border-b border-gray-100 hover:bg-gray-50 ${
+                      index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                    }`}
+                  >
                     <td className="py-4 px-4">
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{loja.nome}</p>
@@ -140,9 +152,9 @@ export function LojasList() {
                       <div>
                         <p className="text-sm font-medium text-gray-900">{loja.gerente}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <a 
-                            href={`https://wa.me/55${loja.telefone.replace(/\D/g, '')}`} 
-                            target="_blank" 
+                          <a
+                            href={`https://wa.me/55${loja.telefone.replace(/\D/g, '')}`}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-green-600 hover:text-green-700 flex items-center"
                           >
@@ -153,30 +165,30 @@ export function LojasList() {
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <Badge className={`text-xs ${statusConf.color}`}>
-                        {statusConf.label}
-                      </Badge>
+                      <Badge className={`text-xs ${statusConf.color}`}>{statusConf.label}</Badge>
                     </td>
                     <td className="py-4 px-4 text-sm text-gray-700 text-center font-medium">
                       {loja.totalArrecadado ? loja.totalArrecadado.toLocaleString() : '0'}
                     </td>
                     <td className="py-4 px-4 text-sm text-gray-700">
-                      {loja.ultimaColeta !== '-' ? new Date(loja.ultimaColeta).toLocaleDateString('pt-BR') : '-'}
+                      {loja.ultimaColeta !== '-'
+                        ? new Date(loja.ultimaColeta).toLocaleDateString('pt-BR')
+                        : '-'}
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                           onClick={() => handleVerLoja(loja)}
                         >
                           <Eye size={14} className="mr-1" />
                           Ver
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="text-green-600 hover:text-green-700 hover:bg-green-50"
                           onClick={() => handleParcerias(loja)}
                         >
@@ -212,14 +224,9 @@ export function LojasList() {
       )}
 
       {/* Modals */}
-      <LojaModal 
-        loja={selectedLoja}
-        isOpen={isLojaModalOpen}
-        onClose={() => setIsLojaModalOpen(false)}
-      />
-      
+      <LojaModal loja={selectedLoja} isOpen={isLojaModalOpen} onClose={() => setIsLojaModalOpen(false)} />
 
-      <ParceriasModal 
+      <ParceriasModal
         loja={parceriasLoja}
         type="loja"
         isOpen={isParceriasModalOpen}
